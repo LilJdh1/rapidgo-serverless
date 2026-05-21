@@ -67,9 +67,19 @@ Stack tecnológico
 
 ---
 
+
 ## Modelo C4
 
-> Diagramas en construcción — se agregarán en el siguiente commit.
+### C1 — Contexto
+![Diagrama C1 - Contexto RapidGo](assets/C1.png)
+
+> Descripción en construcción.
+
+### C2 — Contenedores
+![Diagrama C2 - Contenedores RapidGo](assets/C2.png)
+
+> Descripción en construcción.
+
 
 ---
 
