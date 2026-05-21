@@ -1,7 +1,7 @@
 RapidGo — Backend Serverless en Azure
 
 Tecnológico de Antioquia — Institución Universitaria**  
-Computación en la Nube | Semestre 2026-1**  
+Computación en la Nube | Semestre 2026-1  
 Profesor: Julian David Florez Sanchez  
 Caso 01: Backend Serverless para Aplicación Móvil  
 
