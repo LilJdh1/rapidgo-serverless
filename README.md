@@ -80,7 +80,7 @@ Stack tecnológico
 
 > Descripción en construcción.
 
-### C3 - Componentes
+### C3 — Componentes
 ![Diagrama C3 - Componentes RapidGo](assets/C3.png)
 > Descripción en construcción.
 ---
