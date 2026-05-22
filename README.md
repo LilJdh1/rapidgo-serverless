@@ -73,7 +73,15 @@ Stack tecnológico
 ### C1 — Contexto
 ![Diagrama C1 - Contexto RapidGo](assets/C1.png)
 
-> Descripción en construcción.
+Componente	Descripción
+RapidGo	Sistema central de gestión de domicilios. Es el núcleo que conecta todos los actores y sistemas externos.
+Cliente	Actor que solicita domicilios, realiza pagos y consulta el estado de sus pedidos.
+Repartidor	Actor que recibe los pedidos asignados, actualiza su estado y sube evidencias de entrega.
+Administrador	Actor que monitorea la operación general, gestiona usuarios y genera reportes.
+Pasarela de Pagos	Sistema externo que procesa los pagos electrónicos de los pedidos.
+FCM (Firebase Cloud Messaging)	Sistema externo de Google para el envío de notificaciones push en dispositivos Android.
+APNs (Apple Push Notification Service)	Sistema externo de Apple para el envío de notificaciones push en dispositivos iOS.
+
 
 ### C2 — Contenedores
 ![Diagrama C2 - Contenedores RapidGo](assets/C2.png)
