@@ -1,0 +1,15 @@
+{
+  "name": "rapidgo-functions",
+  "version": "1.0.0",
+  "description": "Backend serverless RapidGo",
+  "scripts": {
+    "start": "func start",
+    "test": "echo \"No tests yet...\""
+  },
+  "dependencies": {
+    "@azure/cosmos": "^4.9.3",
+    "@azure/functions": "^4.0.0",
+    "@azure/notification-hubs": "^2.1.0",
+    "uuid": "^9.0.1"
+  }
+}
