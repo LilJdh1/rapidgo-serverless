@@ -429,4 +429,7 @@ La migración del backend monolítico de RapidGo hacia una arquitectura serverle
 - Notification Hubs se encuentra en **modo de mantenimiento** en el roadmap de Azure; Microsoft no está invirtiendo activamente en nuevas funcionalidades. A largo plazo, la recomendación oficial es migrar a integración directa con Firebase. El equipo debe tenerlo en cuenta para la planificación a 12–18 meses.
 - Si en el futuro RapidGo necesita notificaciones por email o SMS (para usuarios sin la app instalada), será necesario agregar Azure Communication Services al stack, ya que Notification Hubs solo cubre el canal push.
 
+Arquitectura final
+![Arquitectura](assets/Arquitectura.jpeg)
+
 
