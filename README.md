@@ -142,6 +142,7 @@ Modelo serverless donde cada función se factura únicamente por ejecuciones rea
 ### Decisión
 Se elige **Azure Functions con Consumption Plan**. El modelo de pago por uso elimina el costo fijo ineficiente del servidor actual. La escalabilidad automática cubre el requerimiento de 500 req/seg sin intervención del equipo. Los despliegues zero-downtime son nativos. El cold start es aceptable dado que API Management puede configurarse con warm-up policies para rutas críticas.
 
+
 ### Consecuencias
 
 **Lo que ganamos**
@@ -152,7 +153,7 @@ Se elige **Azure Functions con Consumption Plan**. El modelo de pago por uso eli
 **Lo que perdemos o asumimos como trade-off**
 - Cold starts de 300–800ms en funciones poco frecuentes, potencialmente cercanos al límite del SLA de 800ms.
 - Límite de 10 minutos por ejecución en el Consumption Plan; tareas pesadas futuras deberán rediseñarse.
-
+(assets/App_Function.png)
 ---
 
 ## ADR-02: Cosmos DB vs Azure SQL Database para la persistencia de pedidos
@@ -188,7 +189,7 @@ Se elige **Azure Cosmos DB con API NoSQL**, desplegado en **East US** (menor lat
 - Consultas analíticas complejas con JOINs son más costosas en RU/s; se mitigarán exportando datos periódicamente a Blob Storage.
 - El free tier de Cosmos DB es único por suscripción; si ya está en uso, se deberá evaluar Azure SQL Database como alternativa.
 
-
+(assets/Cosmos_DB.png)
   
 
 ## ADR-03: API Management vs exposición directa de las Functions
@@ -222,7 +223,7 @@ Se elige **Azure API Management en Developer tier**, reconociendo explícitament
 - Costo de ~$49 USD/mes ocupa casi la totalidad del presupuesto piloto; solución inviable sin créditos estudiantiles.
 - Developer tier sin SLA de disponibilidad para producción; migrar a Standard tier cuesta ~$300 USD/mes.
 - Latencia adicional de ~20–50ms por el paso del gateway (aún compatible con SLA de 800ms en P95).
-
+(assets/API_Management.png)
 ---
 
 ## ADR-04: Blob Storage vs Azure Files para almacenamiento de archivos
@@ -256,7 +257,7 @@ Se elige **Azure Blob Storage con redundancia LRS Standard**. El modelo de acces
 - Redundancia LRS replica datos únicamente dentro de una sola región; un fallo a nivel de datacenter podría implicar pérdida de datos. En producción real se debería evaluar migrar a GRS (redundancia geográfica).
 - Blob Storage no soporta acceso por protocolo SMB/NFS; si algún servicio interno futuro requiriera montar archivos como unidad de red, sería necesario agregar Azure Files al stack.
 
-
+(assets/Blob_Storage.png)
 
 ## ADR-05: Notification Hubs vs Azure Communication Services
 
@@ -283,6 +284,8 @@ Se elige **Azure Notification Hubs**. La causa raíz de la baja tasa de entrega 
 - Integración directa con FCM v1 y APNs eleva la tasa de entrega del 67% actual a más del 95% requerido, mejorando directamente la experiencia del cliente con estados de pedido en tiempo real.
 - El free tier cubre el volumen estimado del piloto sin impactar el presupuesto.
 - Configuración y pruebas de envío desde el portal de Azure sin dispositivo físico, reduciendo la fricción para el equipo de una sola persona.
+
+(assets/Notification_Hubs.png)
 
 ---
 ## Implementación
