@@ -256,3 +256,73 @@ La migración del backend monolítico de RapidGo hacia una arquitectura serverle
 - La combinación de Notification Hubs y FCM v1 dotó al sistema de una infraestructura robusta de mensajería, logrando revertir y superar con creces la deficiente tasa de entrega del 67% que registraba la plataforma anterior.
 - API Management consolidó la seguridad y el orden del ecosistema al actuar como una fachada única de entrada, simplificando tareas complejas de control de acceso, enrutamiento y futuro versionado de los contratos de la API.
 - El aprovechamiento del crédito de Azure for Students demostró que es viable diseñar, desplegar y validar arquitecturas de software de nivel empresarial manteniéndose estrictamente dentro de los límites del presupuesto asignado para soluciones piloto.
+
+
+
+
+
+## ADR-01: Azure Functions vs App Service para la lógica de negocio
+
+### Título
+Uso de Azure Functions con Consumption Plan sobre Azure App Service para la lógica de negocio de RapidGo.
+
+### Contexto
+RapidGo opera con un patrón de tráfico altamente variable: en horas de baja demanda (2am–8am) el uso de CPU no supera el 4%, mientras que en horas pico (12m–2pm y 6pm–9pm) y días festivos se alcanzan hasta 4.500 pedidos diarios. El servidor dedicado actual cuesta $4.200.000 COP mensuales con costo fijo independiente del tráfico real, y cualquier actualización requiere entre 20 y 30 minutos de inactividad. El equipo de infraestructura es de una sola persona, por lo que se debe minimizar la carga operativa. El presupuesto en Azure no debe superar los $50 USD mensuales durante la fase piloto.
+
+### Alternativas evaluadas
+
+**Azure App Service (Plan B1)**
+Servicio de hospedaje que mantiene una instancia activa de forma permanente. No tiene cold start, pero su costo mínimo es ~$13 USD/mes incluso en horas de madrugada con tráfico casi nulo. Escalar ante picos requiere configurar reglas de autoescalado manualmente. Los despliegues sin downtime requieren deployment slots, no disponibles en tiers económicos.
+
+**Azure Functions (Consumption Plan)**
+Modelo serverless donde cada función se factura únicamente por ejecuciones realizadas, con el primer millón gratuitas por mes. La escalabilidad es completamente automática hasta los 500 req/seg requeridos. El equipo tiene experiencia en Node.js y Python, ambos soportados oficialmente. La única desventaja es el cold start: primera ejecución puede tardar entre 300 y 800ms adicionales.
+
+### Decisión
+Se elige **Azure Functions con Consumption Plan**. El modelo de pago por uso elimina el costo fijo ineficiente del servidor actual. La escalabilidad automática cubre el requerimiento de 500 req/seg sin intervención del equipo. Los despliegues zero-downtime son nativos. El cold start es aceptable dado que API Management puede configurarse con warm-up policies para rutas críticas.
+
+### Consecuencias
+
+**Lo que ganamos**
+- Costo mensual alineado con el tráfico real, dentro del límite de $50 USD del piloto.
+- Escalabilidad automática en picos sin intervención del equipo.
+- Despliegues zero-downtime como comportamiento por defecto.
+
+**Lo que perdemos o asumimos como trade-off**
+- Cold starts de 300–800ms en funciones poco frecuentes, potencialmente cercanos al límite del SLA de 800ms.
+- Límite de 10 minutos por ejecución en el Consumption Plan; tareas pesadas futuras deberán rediseñarse.
+
+---
+
+## ADR-02: Cosmos DB vs Azure SQL Database para la persistencia de pedidos
+
+### Título
+Uso de Azure Cosmos DB (API NoSQL) sobre Azure SQL Database para la persistencia de pedidos y usuarios de RapidGo.
+
+### Contexto
+La base de datos actual es MySQL relacional con 3 años de datos históricos. Se requiere evaluar si mantener el paradigma relacional o migrar a NoSQL. El sistema debe soportar 500 req/seg sin intervención manual y latencia de API menor a 800ms en P95. Los pedidos tienen atributos variables según el tipo de negocio (restaurantes vs. tiendas), lo que genera múltiples columnas nullable y tablas de extensión difíciles de mantener. Por restricción de soberanía de datos, toda la información de usuarios colombianos debe almacenarse en Brazil South o East US. El free tier de Cosmos DB ofrece 1.000 RU/s y 25 GB incluidos.
+
+### Alternativas evaluadas
+
+**Azure SQL Database (free tier)**
+Compatible con el esquema MySQL actual, simplifica la migración de datos históricos. Sin embargo, bajo cargas sostenidas de 500 req/seg el tiempo de respuesta puede degradarse por encima del SLA de 800ms. Escalar implica un costo fijo que compromete el presupuesto. La estructura rígida dificulta incorporar atributos variables por tipo de negocio.
+
+**Azure Cosmos DB (API NoSQL)**
+Base de datos distribuida con modelo de documento JSON, escalabilidad horizontal automática y latencia garantizada menor a 10ms en P99. El modelo de documentos se adapta naturalmente a pedidos con estructuras variables. Disponible en East US, cumpliendo la restricción de soberanía. La desventaja principal es migrar el esquema MySQL a documentos JSON y la curva de aprendizaje del modelo de particionamiento.
+
+### Decisión
+Se elige **Azure Cosmos DB con API NoSQL**, desplegado en **East US** (menor latencia hacia Medellín, Manizales y Pereira que Brazil South, con disponibilidad confirmada del free tier). La estructura de documentos JSON resuelve el problema de atributos variables, la escalabilidad automática satisface los 500 req/seg sin carga operativa, y la latencia garantizada cumple holgadamente el SLA. La migración de datos históricos se realizará mediante un script documentado en `/src/migration/`.
+
+### Consecuencias
+
+**Lo que ganamos**
+- Datos de usuarios colombianos en East US, cumpliendo la restricción de soberanía.
+- Escalabilidad horizontal automática en picos sin intervención manual.
+- Latencia muy por debajo del SLA de 800ms.
+- Esquema flexible para nuevos tipos de negocios sin migraciones de base de datos.
+
+**Lo que perdemos o asumimos como trade-off**
+- Abandono del paradigma relacional; requiere aprendizaje de particionamiento y consistencia eventual.
+- Migración del esquema MySQL a documentos JSON recae sobre el único miembro del equipo.
+- Consultas analíticas complejas con JOINs son más costosas en RU/s; se mitigarán exportando datos periódicamente a Blob Storage.
+- El free tier de Cosmos DB es único por suscripción; si ya está en uso, se deberá evaluar Azure SQL Database como alternativa.
+
