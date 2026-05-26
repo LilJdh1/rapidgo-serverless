@@ -326,3 +326,72 @@ Se elige **Azure Cosmos DB con API NoSQL**, desplegado en **East US** (menor lat
 - Consultas analíticas complejas con JOINs son más costosas en RU/s; se mitigarán exportando datos periódicamente a Blob Storage.
 - El free tier de Cosmos DB es único por suscripción; si ya está en uso, se deberá evaluar Azure SQL Database como alternativa.
 
+
+  
+
+## ADR-03: API Management vs exposición directa de las Functions
+
+### Título
+Uso de Azure API Management como punto de entrada único sobre la exposición directa de Azure Functions.
+
+### Contexto
+La deuda técnica actual incluye manejo artesanal de tokens JWT implementado directamente en el monolito, sin un gateway centralizado para autenticación, throttling ni versionado. La app móvil en React Native no se rediseñará, por lo que la nueva API debe mantener compatibilidad con los contratos de endpoints actuales (mismas rutas y estructura de respuesta JSON). En el futuro se planea incorporar nuevos clientes como app web y API pública para terceros. El requerimiento de disponibilidad es 99.9% mensual. El presupuesto mensual no debe superar los $50 USD durante la fase piloto.
+
+### Alternativas evaluadas
+
+**Exposición directa de Azure Functions (HTTP trigger)**
+No agrega costo ni latencia adicional. Sin embargo, cada función debe implementar por separado su propia lógica de validación JWT, throttling y control de versiones, multiplicando la carga de mantenimiento sobre el único miembro del equipo. Si en el futuro se agregan nuevos clientes, cada uno deberá conectarse directamente a las funciones individuales, haciendo el sistema difícil de evolucionar sin romper los contratos de la app React Native.
+
+**Azure API Management (Developer tier)**
+Gateway administrado que actúa como punto de entrada único. Centraliza la validación JWT mediante políticas declarativas y permite configurar throttling por usuario/IP sin escribir código adicional. Soporta versionado de API nativo para introducir cambios sin afectar la app móvil actual. Su desventaja principal es el costo: el Developer tier tiene un precio de ~$49 USD/mes, consumiendo casi la totalidad del presupuesto piloto.
+
+### Decisión
+Se elige **Azure API Management en Developer tier**, reconociendo explícitamente que su costo de ~$49 USD/mes consume la mayor parte del presupuesto piloto. Se justifica porque centraliza la autenticación JWT (resuelve la deuda técnica crítica), el throttling declarativo protege las Functions sin esfuerzo adicional del equipo, y el URL mapping garantiza compatibilidad con los contratos de la app React Native sin tocar el código móvil. La viabilidad económica depende del uso de créditos Azure for Students ($100 USD). Sin créditos estudiantiles, se deberá implementar validación JWT como middleware compartido y exponer las Functions directamente.
+
+### Consecuencias
+
+**Lo que ganamos**
+- Autenticación JWT centralizada en un único punto, eliminando la deuda técnica del monolito.
+- Throttling declarativo que protege automáticamente las Functions en días festivos.
+- Versionado nativo para evolucionar la API sin romper la app móvil.
+- Observabilidad consolidada en el portal de Azure con métricas por endpoint.
+
+**Lo que perdemos o asumimos como trade-off**
+- Costo de ~$49 USD/mes ocupa casi la totalidad del presupuesto piloto; solución inviable sin créditos estudiantiles.
+- Developer tier sin SLA de disponibilidad para producción; migrar a Standard tier cuesta ~$300 USD/mes.
+- Latencia adicional de ~20–50ms por el paso del gateway (aún compatible con SLA de 800ms en P95).
+
+---
+
+## ADR-04: Blob Storage vs Azure Files para almacenamiento de archivos
+
+### Título
+Uso de Azure Blob Storage (LRS Standard) sobre Azure Files para el almacenamiento de comprobantes de entrega e imágenes de productos de RapidGo.
+
+### Contexto
+RapidGo necesita almacenar tres tipos de archivos: fotos de comprobantes de entrega tomadas por repartidores desde la app móvil, imágenes de productos de restaurantes y tiendas, y exports de reportes operacionales generados periódicamente. Estos archivos deben ser accesibles directamente desde la app React Native mediante URLs, sin requerir montaje de sistemas de archivos. El equipo de infraestructura es de una sola persona y debe minimizarse la carga operativa. El presupuesto del piloto es de $50 USD mensuales.
+
+### Alternativas evaluadas
+
+**Azure Files**
+Servicio de almacenamiento que expone archivos mediante protocolos SMB y NFS, pensado para montarse como unidad de red. No es compatible con la app móvil React Native, que necesita descargar imágenes mediante URLs HTTP directas sin montar ningún volumen. Su costo por GB (~$0.06 USD/GB/mes Standard) es aproximadamente tres veces mayor que Blob Storage, y su administración requiere configurar shares, permisos de red y puntos de montaje.
+
+**Azure Blob Storage (LRS Standard)**
+Servicio de almacenamiento de objetos diseñado para archivos no estructurados accesibles mediante URLs HTTP. Soporta SAS tokens (Shared Access Signatures) para dar acceso temporal y controlado sin exponer archivos públicamente de forma permanente, ideal para que repartidores suban comprobantes y clientes los visualicen desde la app. Su costo por GB es de ~$0.018 USD/mes en LRS. La integración con Azure Functions mediante Blob triggers es nativa en el SDK.
+
+### Decisión
+Se elige **Azure Blob Storage con redundancia LRS Standard**. El modelo de acceso por URL HTTP con SAS tokens es el patrón correcto para todos los casos de uso de RapidGo: repartidores suben fotos desde la app móvil, clientes las visualizan en la misma app, y los reportes se descargan desde el portal administrativo, todo mediante URLs directas. Azure Files no agrega valor en este contexto y triplica el costo de almacenamiento.
+
+### Consecuencias
+
+**Lo que ganamos**
+- Acceso desde la app móvil mediante URLs directas con SAS tokens de tiempo limitado, sin complejidad adicional en el cliente.
+- Costo por GB significativamente menor que Azure Files, contribuyendo a mantenerse dentro del presupuesto piloto.
+- Integración nativa con Azure Functions mediante Blob triggers para automatizar el procesamiento de imágenes.
+- Sin administración de shares, permisos de red ni puntos de montaje.
+
+**Lo que perdemos o asumimos como trade-off**
+- Redundancia LRS replica datos únicamente dentro de una sola región; un fallo a nivel de datacenter podría implicar pérdida de datos. En producción real se debería evaluar migrar a GRS (redundancia geográfica).
+- Blob Storage no soporta acceso por protocolo SMB/NFS; si algún servicio interno futuro requiriera montar archivos como unidad de red, sería necesario agregar Azure Files al stack.
+
+
