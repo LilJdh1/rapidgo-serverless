@@ -123,144 +123,6 @@ Stack tecnológico
 
 ## Decisiones Arquitectónicas (ADRs)
 
-> ADRs en construcción — se agregarán en el siguiente commit.
-
----
-## Implementación
-
-### Flujo crítico implementado
-
-El flujo crítico de RapidGo fue implementado y probado de extremo a extremo utilizando Azure Functions como backend serverless, Cosmos DB como base de datos, Notification Hubs para las notificaciones push y Postman como cliente HTTP para simular la aplicación móvil. Las peticiones fueron enrutadas a través de API Management como puerta de entrada única.
-
-### Stack de pruebas
-
-| Herramienta | Uso |
-|---|---|
-| Postman | Cliente HTTP para simular las peticiones de la app móvil |
-| API Management | Puerta de entrada única que enruta las peticiones a las Functions |
-| Azure Functions | Procesamiento de la lógica de negocio |
-| Cosmos DB | Persistencia de los pedidos |
-| Notification Hubs | Envío de notificaciones push |
-| Firebase (FCM v1) | Proveedor de notificaciones Android |
-
-### Paso 1 — Registrar pedido
-
-**Endpoint:** `POST /rapidgo/pedidos`  
-**Función:** `registrarPedido`  
-**Descripción:** Recibe los datos del pedido, los valida y los persiste en Cosmos DB con estado `confirmado`.
-
-**Body de la petición:**
-```json
-{
-  "usuarioId": "usuario-002",
-  "restauranteId": "restaurante-001",
-  "productos": ["pizza", "gaseosa"],
-  "direccionEntrega": "Carrera 80 #45-10, Medellín"
-}
-```
-
-### Paso 2 — Actualizar estado
-
-**Endpoint:** `PUT /rapidgo/pedidos/{id}`  
-**Función:** `actualizarEstado`  
-**Descripción:** Actualiza el estado del pedido a `en camino` en Cosmos DB y registra la fecha de actualización.
-
-**Body de la petición:**
-```json
-{
-  "estado": "en camino",
-  "usuarioId": "usuario-002"
-}
-```
-
-### Paso 3 — Enviar notificación push
-
-**Endpoint:** `POST /rapidgo/notificaciones`  
-**Función:** `notificarCliente`  
-**Descripción:** Envía una notificación push al cliente informando el nuevo estado del pedido a través de Notification Hubs con FCM v1.
-
-**Body de la petición:**
-```json
-{
-  "usuarioId": "usuario-002",
-  "pedidoId": "b4d76733-208d-47cd-956c-74e219dadae4",
-  "estado": "en camino"
-}
-```
-
-### Paso 4 — Consultar historial
-
-**Endpoint:** `GET /rapidgo/pedidos/{id}?usuarioId={usuarioId}`  
-**Función:** `consultarHistorial`  
-**Descripción:** Consulta el estado actual y el historial del pedido desde Cosmos DB.
-
-
-
-## Evidencias
-
-### Servicios aprovisionados en Azure
-
-Los cinco servicios requeridos fueron desplegados en el Resource Group `rg-rapidgo` en la región East US.
-
-![Servicios en Azure](assets/Servicios.png)
-
-### Cosmos DB — Documento del pedido
-
-El pedido fue persistido correctamente en la colección `pedidos` de la base de datos `rapidgo-db`.
-
-![Cosmos DB](assets/CosmoDB.png)
-
-### Postman — Ejecución del flujo crítico
-
-#### Paso 1 — POST /pedidos
-![Registrar Pedido](assets/RegistrarPedido%20-%20POST.png)
-
-![Logs registrarPedido](assets/Logs%20-%20RegistrarPedido.png)
-
-#### Paso 2 — PUT /pedidos/{id}
-![Actualizar Estado](assets/ActualizarEstado%20-%20PUT.png)
-
-![Logs actualizarEstado](assets/Logs%20-%20ActualizarEstado.png)
-
-#### Paso 3 — POST /notificaciones
-![Notificar Cliente](assets/NotificarCliente%20-%20POST.png)
-
-![Logs notificarCliente](assets/Logs%20-%20NotificarCliente.png)
-
-#### Paso 4 — GET /pedidos/{id}
-![Consultar Historial](assets/ConsultarHistorial%20-%20GET.png)
-
-![Logs consultarHistorial](assets/Logs%20-%20ConsultarHistorial.png)
-
-
-## Conclusiones
-
-La migración del backend monolítico de RapidGo hacia una arquitectura serverless en Microsoft Azure demostró ser una solución viable y efectiva para resolver los problemas críticos de escalabilidad, disponibilidad y costos que enfrentaba la empresa.
-
-### Logros obtenidos
-
-| Requerimiento | Métrica objetivo | Resultado |
-|---|---|---|
-| Disponibilidad | 99.9% mensual | Azure Functions con plan de consumo garantiza alta disponibilidad nativa sin administración de servidores. |
-| Escalabilidad | 500 req/seg sin intervención | Escalabilidad elástica y automática de 0 a N instancias en respuesta inmediata a la demanda de pedidos. |
-| Modelo de costos | Pago por uso real | Se eliminó el costo fijo de $4.2M COP mensuales del servidor dedicado, pagando solo por milisegundo de ejecución. |
-| Despliegue | Zero-downtime | El esquema de despliegue de las Functions permite actualizar la lógica de negocio sin interrumpir los flujos en curso. |
-| Notificaciones push | Tasa de entrega > 95% | Azure Notification Hubs integrado con FCM v1 garantiza un canal de alertas eficiente y directo hacia los clientes. |
-| Tolerancia a fallos | Sin punto único de fallo | Diseño basado en una arquitectura distribuida y desacoplada utilizando los servicios administrados de Azure. |
-
-### Aprendizajes del equipo
-
-- La arquitectura serverless exige un cambio de paradigma frente al desarrollo tradicional, requiriendo que cada componente sea completamente desacoplado, orientado a eventos y stateless (sin estado).
-- Azure Functions bajo el plan de consumo demostró ser la alternativa más costo-eficiente para manejar la predictibilidad y los picos de demanda característicos del sector de domicilios en el Valle de Aburrá.
-- Cosmos DB como base de datos NoSQL validó la decisión de migrar desde un modelo relacional rígido como MySQL, ofreciendo la flexibilidad necesaria para iterar sobre los esquemas de pedidos y comercios sin fricción.
-- La combinación de Notification Hubs y FCM v1 dotó al sistema de una infraestructura robusta de mensajería, logrando revertir y superar con creces la deficiente tasa de entrega del 67% que registraba la plataforma anterior.
-- API Management consolidó la seguridad y el orden del ecosistema al actuar como una fachada única de entrada, simplificando tareas complejas de control de acceso, enrutamiento y futuro versionado de los contratos de la API.
-- El aprovechamiento del crédito de Azure for Students demostró que es viable diseñar, desplegar y validar arquitecturas de software de nivel empresarial manteniéndose estrictamente dentro de los límites del presupuesto asignado para soluciones piloto.
-
-
-
-
-
 ## ADR-01: Azure Functions vs App Service para la lógica de negocio
 
 ### Título
@@ -421,6 +283,144 @@ Se elige **Azure Notification Hubs**. La causa raíz de la baja tasa de entrega 
 - Integración directa con FCM v1 y APNs eleva la tasa de entrega del 67% actual a más del 95% requerido, mejorando directamente la experiencia del cliente con estados de pedido en tiempo real.
 - El free tier cubre el volumen estimado del piloto sin impactar el presupuesto.
 - Configuración y pruebas de envío desde el portal de Azure sin dispositivo físico, reduciendo la fricción para el equipo de una sola persona.
+
+---
+## Implementación
+
+### Flujo crítico implementado
+
+El flujo crítico de RapidGo fue implementado y probado de extremo a extremo utilizando Azure Functions como backend serverless, Cosmos DB como base de datos, Notification Hubs para las notificaciones push y Postman como cliente HTTP para simular la aplicación móvil. Las peticiones fueron enrutadas a través de API Management como puerta de entrada única.
+
+### Stack de pruebas
+
+| Herramienta | Uso |
+|---|---|
+| Postman | Cliente HTTP para simular las peticiones de la app móvil |
+| API Management | Puerta de entrada única que enruta las peticiones a las Functions |
+| Azure Functions | Procesamiento de la lógica de negocio |
+| Cosmos DB | Persistencia de los pedidos |
+| Notification Hubs | Envío de notificaciones push |
+| Firebase (FCM v1) | Proveedor de notificaciones Android |
+
+### Paso 1 — Registrar pedido
+
+**Endpoint:** `POST /rapidgo/pedidos`  
+**Función:** `registrarPedido`  
+**Descripción:** Recibe los datos del pedido, los valida y los persiste en Cosmos DB con estado `confirmado`.
+
+**Body de la petición:**
+```json
+{
+  "usuarioId": "usuario-002",
+  "restauranteId": "restaurante-001",
+  "productos": ["pizza", "gaseosa"],
+  "direccionEntrega": "Carrera 80 #45-10, Medellín"
+}
+```
+
+### Paso 2 — Actualizar estado
+
+**Endpoint:** `PUT /rapidgo/pedidos/{id}`  
+**Función:** `actualizarEstado`  
+**Descripción:** Actualiza el estado del pedido a `en camino` en Cosmos DB y registra la fecha de actualización.
+
+**Body de la petición:**
+```json
+{
+  "estado": "en camino",
+  "usuarioId": "usuario-002"
+}
+```
+
+### Paso 3 — Enviar notificación push
+
+**Endpoint:** `POST /rapidgo/notificaciones`  
+**Función:** `notificarCliente`  
+**Descripción:** Envía una notificación push al cliente informando el nuevo estado del pedido a través de Notification Hubs con FCM v1.
+
+**Body de la petición:**
+```json
+{
+  "usuarioId": "usuario-002",
+  "pedidoId": "b4d76733-208d-47cd-956c-74e219dadae4",
+  "estado": "en camino"
+}
+```
+
+### Paso 4 — Consultar historial
+
+**Endpoint:** `GET /rapidgo/pedidos/{id}?usuarioId={usuarioId}`  
+**Función:** `consultarHistorial`  
+**Descripción:** Consulta el estado actual y el historial del pedido desde Cosmos DB.
+
+
+
+## Evidencias
+
+### Servicios aprovisionados en Azure
+
+Los cinco servicios requeridos fueron desplegados en el Resource Group `rg-rapidgo` en la región East US.
+
+![Servicios en Azure](assets/Servicios.png)
+
+### Cosmos DB — Documento del pedido
+
+El pedido fue persistido correctamente en la colección `pedidos` de la base de datos `rapidgo-db`.
+
+![Cosmos DB](assets/CosmoDB.png)
+
+### Postman — Ejecución del flujo crítico
+
+#### Paso 1 — POST /pedidos
+![Registrar Pedido](assets/RegistrarPedido%20-%20POST.png)
+
+![Logs registrarPedido](assets/Logs%20-%20RegistrarPedido.png)
+
+#### Paso 2 — PUT /pedidos/{id}
+![Actualizar Estado](assets/ActualizarEstado%20-%20PUT.png)
+
+![Logs actualizarEstado](assets/Logs%20-%20ActualizarEstado.png)
+
+#### Paso 3 — POST /notificaciones
+![Notificar Cliente](assets/NotificarCliente%20-%20POST.png)
+
+![Logs notificarCliente](assets/Logs%20-%20NotificarCliente.png)
+
+#### Paso 4 — GET /pedidos/{id}
+![Consultar Historial](assets/ConsultarHistorial%20-%20GET.png)
+
+![Logs consultarHistorial](assets/Logs%20-%20ConsultarHistorial.png)
+
+
+## Conclusiones
+
+La migración del backend monolítico de RapidGo hacia una arquitectura serverless en Microsoft Azure demostró ser una solución viable y efectiva para resolver los problemas críticos de escalabilidad, disponibilidad y costos que enfrentaba la empresa.
+
+### Logros obtenidos
+
+| Requerimiento | Métrica objetivo | Resultado |
+|---|---|---|
+| Disponibilidad | 99.9% mensual | Azure Functions con plan de consumo garantiza alta disponibilidad nativa sin administración de servidores. |
+| Escalabilidad | 500 req/seg sin intervención | Escalabilidad elástica y automática de 0 a N instancias en respuesta inmediata a la demanda de pedidos. |
+| Modelo de costos | Pago por uso real | Se eliminó el costo fijo de $4.2M COP mensuales del servidor dedicado, pagando solo por milisegundo de ejecución. |
+| Despliegue | Zero-downtime | El esquema de despliegue de las Functions permite actualizar la lógica de negocio sin interrumpir los flujos en curso. |
+| Notificaciones push | Tasa de entrega > 95% | Azure Notification Hubs integrado con FCM v1 garantiza un canal de alertas eficiente y directo hacia los clientes. |
+| Tolerancia a fallos | Sin punto único de fallo | Diseño basado en una arquitectura distribuida y desacoplada utilizando los servicios administrados de Azure. |
+
+### Aprendizajes del equipo
+
+- La arquitectura serverless exige un cambio de paradigma frente al desarrollo tradicional, requiriendo que cada componente sea completamente desacoplado, orientado a eventos y stateless (sin estado).
+- Azure Functions bajo el plan de consumo demostró ser la alternativa más costo-eficiente para manejar la predictibilidad y los picos de demanda característicos del sector de domicilios en el Valle de Aburrá.
+- Cosmos DB como base de datos NoSQL validó la decisión de migrar desde un modelo relacional rígido como MySQL, ofreciendo la flexibilidad necesaria para iterar sobre los esquemas de pedidos y comercios sin fricción.
+- La combinación de Notification Hubs y FCM v1 dotó al sistema de una infraestructura robusta de mensajería, logrando revertir y superar con creces la deficiente tasa de entrega del 67% que registraba la plataforma anterior.
+- API Management consolidó la seguridad y el orden del ecosistema al actuar como una fachada única de entrada, simplificando tareas complejas de control de acceso, enrutamiento y futuro versionado de los contratos de la API.
+- El aprovechamiento del crédito de Azure for Students demostró que es viable diseñar, desplegar y validar arquitecturas de software de nivel empresarial manteniéndose estrictamente dentro de los límites del presupuesto asignado para soluciones piloto.
+
+
+
+
+
+
 
 **Lo que perdemos o asumimos como trade-off**
 - Notification Hubs se encuentra en **modo de mantenimiento** en el roadmap de Azure; Microsoft no está invirtiendo activamente en nuevas funcionalidades. A largo plazo, la recomendación oficial es migrar a integración directa con Firebase. El equipo debe tenerlo en cuenta para la planificación a 12–18 meses.
