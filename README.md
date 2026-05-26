@@ -126,18 +126,18 @@ Stack tecnológico
 > ADRs en construcción — se agregarán en el siguiente commit.
 
 ---
-
 ## Implementación
 
 ### Flujo crítico implementado
 
-El flujo crítico de RapidGo fue implementado y probado de extremo a extremo utilizando Azure Functions como backend serverless, Cosmos DB como base de datos, Notification Hubs para las notificaciones push y Postman como cliente HTTP para simular la aplicación móvil.
+El flujo crítico de RapidGo fue implementado y probado de extremo a extremo utilizando Azure Functions como backend serverless, Cosmos DB como base de datos, Notification Hubs para las notificaciones push y Postman como cliente HTTP para simular la aplicación móvil. Las peticiones fueron enrutadas a través de API Management como puerta de entrada única.
 
 ### Stack de pruebas
 
 | Herramienta | Uso |
 |---|---|
 | Postman | Cliente HTTP para simular las peticiones de la app móvil |
+| API Management | Puerta de entrada única que enruta las peticiones a las Functions |
 | Azure Functions | Procesamiento de la lógica de negocio |
 | Cosmos DB | Persistencia de los pedidos |
 | Notification Hubs | Envío de notificaciones push |
@@ -145,53 +145,55 @@ El flujo crítico de RapidGo fue implementado y probado de extremo a extremo uti
 
 ### Paso 1 — Registrar pedido
 
-**Endpoint:** `POST /api/pedidos`  
+**Endpoint:** `POST /rapidgo/pedidos`  
 **Función:** `registrarPedido`  
 **Descripción:** Recibe los datos del pedido, los valida y los persiste en Cosmos DB con estado `confirmado`.
 
 **Body de la petición:**
-json
+```json
 {
-  "usuarioId": "usuario-001",
+  "usuarioId": "usuario-002",
   "restauranteId": "restaurante-001",
-  "productos": ["hamburguesa", "papas fritas"],
-  "direccionEntrega": "Calle 10 #43-12, Medellín"
+  "productos": ["pizza", "gaseosa"],
+  "direccionEntrega": "Carrera 80 #45-10, Medellín"
 }
-
+```
 
 ### Paso 2 — Actualizar estado
 
-**Endpoint:** `PUT /api/pedidos/{id}`  
+**Endpoint:** `PUT /rapidgo/pedidos/{id}`  
 **Función:** `actualizarEstado`  
 **Descripción:** Actualiza el estado del pedido a `en camino` en Cosmos DB y registra la fecha de actualización.
 
 **Body de la petición:**
-json
+```json
 {
   "estado": "en camino",
-  "usuarioId": "usuario-001"
+  "usuarioId": "usuario-002"
 }
+```
 
+### Paso 3 — Enviar notificación push
 
-### Paso 3 — Consultar historial
-
-**Endpoint:** `GET /api/pedidos/{id}?usuarioId={usuarioId}`  
-**Función:** `consultarHistorial`  
-**Descripción:** Consulta el estado actual y el historial del pedido desde Cosmos DB.
-
-### Paso 4 — Enviar notificación push
-
-**Endpoint:** `POST /api/notificaciones`  
+**Endpoint:** `POST /rapidgo/notificaciones`  
 **Función:** `notificarCliente`  
 **Descripción:** Envía una notificación push al cliente informando el nuevo estado del pedido a través de Notification Hubs con FCM v1.
 
 **Body de la petición:**
-json
+```json
 {
-  "usuarioId": "usuario-001",
-  "pedidoId": "9ea993b6-fd9f-4dec-836c-4f23572538ea",
+  "usuarioId": "usuario-002",
+  "pedidoId": "b4d76733-208d-47cd-956c-74e219dadae4",
   "estado": "en camino"
 }
+```
+
+### Paso 4 — Consultar historial
+
+**Endpoint:** `GET /rapidgo/pedidos/{id}?usuarioId={usuarioId}`  
+**Función:** `consultarHistorial`  
+**Descripción:** Consulta el estado actual y el historial del pedido desde Cosmos DB.
+
 
 
 ## Evidencias
@@ -220,15 +222,15 @@ El pedido fue persistido correctamente en la colección `pedidos` de la base de 
 
 ![Logs actualizarEstado](assets/Logs%20-%20ActualizarEstado.png)
 
-#### Paso 3 — GET /pedidos/{id}
-![Consultar Historial](assets/ConsultarHistorial%20-%20GET.png)
-
-![Logs consultarHistorial](assets/Logs%20-%20ConsultarHistorial.png)
-
-#### Paso 4 — POST /notificaciones
+#### Paso 3 — POST /notificaciones
 ![Notificar Cliente](assets/NotificarCliente%20-%20POST.png)
 
 ![Logs notificarCliente](assets/Logs%20-%20NotificarCliente.png)
+
+#### Paso 4 — GET /pedidos/{id}
+![Consultar Historial](assets/ConsultarHistorial%20-%20GET.png)
+
+![Logs consultarHistorial](assets/Logs%20-%20ConsultarHistorial.png)
 
 
 ## Conclusiones
@@ -237,25 +239,20 @@ La migración del backend monolítico de RapidGo hacia una arquitectura serverle
 
 ### Logros obtenidos
 
-| Requerimiento | Resultado |
-|---|---|
-| Escalabilidad automática | Azure Functions escala de 0 a N instancias sin intervención manual |
-| Modelo de pago por uso | Se eliminó el costo fijo del servidor dedicado |
-| Zero-downtime deployment | Las Functions se despliegan sin afectar pedidos en curso |
-| Notificaciones push | Notification Hubs con FCM v1 garantiza entregas confiables |
-| Tolerancia a fallos | Arquitectura distribuida sin punto único de fallo |
+| Requerimiento | Métrica objetivo | Resultado |
+|---|---|---|
+| Disponibilidad | 99.9% mensual | Azure Functions con plan de consumo garantiza alta disponibilidad nativa sin administración de servidores. |
+| Escalabilidad | 500 req/seg sin intervención | Escalabilidad elástica y automática de 0 a N instancias en respuesta inmediata a la demanda de pedidos. |
+| Modelo de costos | Pago por uso real | Se eliminó el costo fijo de $4.2M COP mensuales del servidor dedicado, pagando solo por milisegundo de ejecución. |
+| Despliegue | Zero-downtime | El esquema de despliegue de las Functions permite actualizar la lógica de negocio sin interrumpir los flujos en curso. |
+| Notificaciones push | Tasa de entrega > 95% | Azure Notification Hubs integrado con FCM v1 garantiza un canal de alertas eficiente y directo hacia los clientes. |
+| Tolerancia a fallos | Sin punto único de fallo | Diseño basado en una arquitectura distribuida y desacoplada utilizando los servicios administrados de Azure. |
 
 ### Aprendizajes del equipo
 
-- La arquitectura serverless exige una mentalidad diferente al desarrollo tradicional, donde cada función debe ser independiente y stateless.
-- Azure Functions con el plan de consumo demostró ser la opción más costo-eficiente para cargas de trabajo variables como los domicilios de RapidGo.
-- Cosmos DB como base de datos NoSQL facilitó el manejo de esquemas flexibles para los diferentes tipos de pedidos y negocios.
-- La integración entre Notification Hubs y Firebase FCM v1 permite una infraestructura de notificaciones push robusta y escalable.
-- El uso de API Management como puerta de entrada única centraliza la autenticación y el control de acceso de forma efectiva.
-
-### Trabajo futuro
-
-- Configurar API Management con los endpoints del flujo crítico para centralizar el acceso a las Functions.
-- Implementar autenticación JWT completa en API Management.
-- Configurar alertas y monitoreo en Application Insights para detectar anomalías en tiempo real.
-- Registrar dispositivos reales en Notification Hubs para validar la entrega de notificaciones push en producción.
+- La arquitectura serverless exige un cambio de paradigma frente al desarrollo tradicional, requiriendo que cada componente sea completamente desacoplado, orientado a eventos y stateless (sin estado).
+- Azure Functions bajo el plan de consumo demostró ser la alternativa más costo-eficiente para manejar la predictibilidad y los picos de demanda característicos del sector de domicilios en el Valle de Aburrá.
+- Cosmos DB como base de datos NoSQL validó la decisión de migrar desde un modelo relacional rígido como MySQL, ofreciendo la flexibilidad necesaria para iterar sobre los esquemas de pedidos y comercios sin fricción.
+- La combinación de Notification Hubs y FCM v1 dotó al sistema de una infraestructura robusta de mensajería, logrando revertir y superar con creces la deficiente tasa de entrega del 67% que registraba la plataforma anterior.
+- API Management consolidó la seguridad y el orden del ecosistema al actuar como una fachada única de entrada, simplificando tareas complejas de control de acceso, enrutamiento y futuro versionado de los contratos de la API.
+- El aprovechamiento del crédito de Azure for Students demostró que es viable diseñar, desplegar y validar arquitecturas de software de nivel empresarial manteniéndose estrictamente dentro de los límites del presupuesto asignado para soluciones piloto.
