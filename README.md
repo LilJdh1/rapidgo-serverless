@@ -395,3 +395,35 @@ Se elige **Azure Blob Storage con redundancia LRS Standard**. El modelo de acces
 - Blob Storage no soporta acceso por protocolo SMB/NFS; si algún servicio interno futuro requiriera montar archivos como unidad de red, sería necesario agregar Azure Files al stack.
 
 
+
+## ADR-05: Notification Hubs vs Azure Communication Services
+
+### Título
+Uso de Azure Notification Hubs sobre Azure Communication Services para notificaciones push a clientes de RapidGo.
+
+### Contexto
+El sistema actual de notificaciones push de RapidGo tiene una tasa de entrega del 67% debido a la falta de integración directa con FCM (Firebase Cloud Messaging, para Android) y APNs (Apple Push Notification service, para iOS). Esto genera confusión en los clientes sobre el estado de sus pedidos y contribuye a cancelaciones evitables. El requerimiento es alcanzar una tasa de entrega superior al 95%. RapidGo tiene usuarios en Android e iOS y 340 repartidores activos que también reciben notificaciones de nuevos pedidos asignados. El free tier de Notification Hubs incluye 1 millón de notificaciones al mes. El equipo no tiene experiencia previa con servicios de comunicaciones en la nube.
+
+### Alternativas evaluadas
+
+**Azure Communication Services (ACS)**
+Plataforma multicanal que centraliza email, SMS, voz, chat y notificaciones push en un único servicio. Su fortaleza está en los canales de email y SMS (1 millón de emails mensuales gratis). Para push notifications móviles, ACS requiere configuración adicional y su soporte para FCM y APNs, aunque existente, no es su caso de uso principal. No tiene free tier específico para push, lo que implica costos adicionales fuera del presupuesto piloto. Representa mayor curva de aprendizaje para un equipo sin experiencia previa en comunicaciones cloud.
+
+**Azure Notification Hubs**
+Servicio diseñado específicamente para el envío masivo de notificaciones push a dispositivos Android e iOS. Se integra directamente con FCM v1 y APNs mediante certificados y credenciales configuradas en el portal de Azure, eliminando la capa artesanal que hoy causa la baja tasa de entrega del 67%. El free tier incluye 1 millón de notificaciones al mes, suficiente para el volumen estimado del piloto (~50.000–100.000 notificaciones mensuales). El SDK está disponible para Node.js, compatible con el runtime de las Azure Functions del equipo. La configuración puede probarse desde el portal de Azure sin necesidad de un dispositivo físico.
+
+### Decisión
+Se elige **Azure Notification Hubs**. La causa raíz de la baja tasa de entrega actual es la ausencia de integración directa con FCM y APNs, y Notification Hubs resuelve exactamente ese problema con integración nativa y documentada para ambas plataformas. El free tier cubre el volumen del piloto sin costo adicional. El SDK para Node.js facilita la integración con las Azure Functions sin requerir que el equipo aprenda nuevos lenguajes o plataformas.
+
+### Consecuencias
+
+**Lo que ganamos**
+- Integración directa con FCM v1 y APNs eleva la tasa de entrega del 67% actual a más del 95% requerido, mejorando directamente la experiencia del cliente con estados de pedido en tiempo real.
+- El free tier cubre el volumen estimado del piloto sin impactar el presupuesto.
+- Configuración y pruebas de envío desde el portal de Azure sin dispositivo físico, reduciendo la fricción para el equipo de una sola persona.
+
+**Lo que perdemos o asumimos como trade-off**
+- Notification Hubs se encuentra en **modo de mantenimiento** en el roadmap de Azure; Microsoft no está invirtiendo activamente en nuevas funcionalidades. A largo plazo, la recomendación oficial es migrar a integración directa con Firebase. El equipo debe tenerlo en cuenta para la planificación a 12–18 meses.
+- Si en el futuro RapidGo necesita notificaciones por email o SMS (para usuarios sin la app instalada), será necesario agregar Azure Communication Services al stack, ya que Notification Hubs solo cubre el canal push.
+
+
